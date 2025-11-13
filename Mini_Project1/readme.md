@@ -39,7 +39,6 @@
 ---
 
 ## 📐 시스템 구성도
-<details> <summary>👀 실제 Markdown 코드</summary>
 
 ```
 [User Input]
@@ -55,8 +54,6 @@
 ┣━━ Buzzer
 ┗━━ LEDs
 ```
-
-</details>
 
 ※ FSM 상태: `대기 → 조리 → 일시정지 → 완료`
 
@@ -114,6 +111,7 @@
 ---
 
 ## 📂 폴더 구조 예시
+```
 📦microwave_project
 ┣ 📂sim
 ┃ ┣ testbench_melody.v
@@ -126,7 +124,7 @@
 ┃ ┗ button_debounce.v
 ┣ README.md
 ┗ microwave.xpr
-
+```
 ---
 
 ## 🔗 참고 자료 / 외부 링크
