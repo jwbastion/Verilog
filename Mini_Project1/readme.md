@@ -39,6 +39,9 @@
 ---
 
 ## 📐 시스템 구성도
+<details> <summary>👀 실제 Markdown 코드</summary>
+
+```
 [User Input]
 ┣━━ Rotary Switch (시간 설정)
 ┣━━ Buttons (시작 / 리셋 / 도어)
@@ -51,6 +54,9 @@
 ┣━━ 7-Segment Display
 ┣━━ Buzzer
 ┗━━ LEDs
+```
+
+</details>
 
 ※ FSM 상태: `대기 → 조리 → 일시정지 → 완료`
 
