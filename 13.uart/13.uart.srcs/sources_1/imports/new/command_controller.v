@@ -5,7 +5,9 @@ module command_controller(
     input reset,
     input [2:0] btn,
     input [7:0] sw,
-    output [13:0] seg,
+    input [7:0] rx_data,
+    input rx_done,
+    output [13:0] seg_data,
     output reg [15:0] led
     );
 
@@ -26,6 +28,9 @@ module command_controller(
             r_prev_btnL <= 0;
         end else begin
             if(btn[0] && !r_prev_btnL)
+                r_mode = (r_mode == SLIDE_SW_READ) ? UP_COUNTER : r_mode + 1;
+            
+            if(rx_done && rx_data == 8'h4D)   // 4d --> 'M'
                 r_mode = (r_mode == SLIDE_SW_READ) ? UP_COUNTER : r_mode + 1;
         end
         r_prev_btnL <= btn[0];
@@ -49,6 +54,21 @@ module command_controller(
         end
     end
 
+    //================================================================
+    // rx_data가 0이면 led[0] Toggle, rx_data가 1이면 led[1] Toggle 구현
+    //================================================================
+    always @(posedge clk or posedge reset) begin
+        if (reset) begin
+            led[1:0] <= 0;
+        end else if (rx_done) begin
+            case (rx_data)
+                8'h30: led[0] <= ~led[0];  // 0 입력 시
+                8'h31: led[1] <= ~led[1];  // 1 입력 시
+                default: led[1:0] <= 0;
+            endcase
+        end
+    end
+
     //----- led mode display -----
     always @(r_mode) begin
         case(r_mode)
@@ -66,6 +86,6 @@ module command_controller(
         endcase
     end
 
-    assign seg = (r_mode == UP_COUNTER) ? r_ms_counter :
+    assign seg_data = (r_mode == UP_COUNTER) ? r_ms_counter :
                       (r_mode == DOWN_COUNTER) ? r_ms_counter : sw; 
 endmodule

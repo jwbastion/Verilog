@@ -27,7 +27,7 @@ module uart_controller(
         .clk(clk),
         .reset(reset),
         .start_trigger(w_tick_1Hz),
-        //.send_data(8'h0D),
+        .send_data(send_data),
         .tx_busy(w_tx_busy),
         .tx_done(w_tx_done),
         .tx_start(w_tx_start),
@@ -45,4 +45,15 @@ module uart_controller(
         .tx_done(w_tx_done),
         .tx_busy(w_tx_busy)
         );
+    
+    uart_rx #(
+    .BPS(9600),
+    .SAMPLE(16)
+    ) u_uart_rx(
+        .clk(clk),
+        .reset(reset),
+        .rx(rx),
+        .data_out(rx_data),
+        .rx_done(rx_done)
+    );
 endmodule

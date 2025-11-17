@@ -12,24 +12,12 @@ module data_sender(
     );
 
     // CR, H, e, l, l, o, !, , J, W, Y, o, o, LF
-    reg [7:0] msg[0:13];
+    reg [7:0] msg[0:3];
     reg [3:0] r_data_cnt = 0;
 
     initial begin
-        msg[0] = 8'h0D;
-        msg[1] = "H";
-        msg[2] = "e";
-        msg[3] = "l";
-        msg[4] = "l";
-        msg[5] = "o";
-        msg[6] = 8'h21;
-        msg[7] = 8'h20;
-        msg[8] = "J";
-        msg[9] = "W";
-        msg[10] = "Y";
-        msg[11] = "o";
-        msg[12] = "o";
-        msg[13] = 8'h0A;
+        msg[0] = "J";
+        msg[1] = "W";
     end
 
     always @(posedge clk, posedge reset) begin
@@ -41,7 +29,7 @@ module data_sender(
                 tx_start <= 1'b1;
                 tx_data <= msg[r_data_cnt];
 
-                if(r_data_cnt == 13) begin
+                if(r_data_cnt == 1) begin
                     r_data_cnt <= 0;
                 end else begin
                     r_data_cnt <= r_data_cnt + 1;

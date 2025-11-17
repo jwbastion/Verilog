@@ -10,7 +10,7 @@ module tb_uart_tx;
     wire tx_busy;
 
     uart_tx  #(
-      .BPS(100_000_000)
+      .BPS(10_000_000)
     )u_uart_tx(
         .clk(clk),
         .reset(reset),
