@@ -8,7 +8,11 @@ module command_controller(
     input [7:0] rx_data,   // for UART 
     input rx_done,   // UART
     output [13:0] seg_data,
-    output reg [15:0] led
+    output reg [15:0] led,
+
+    // â˜… data_senderë¡œ ë³´ë‚¼ ë©”ì‹œì§€ (ë‹¨ìˆœ ì¶œë ¥ë§Œ)
+    output reg [511:0] uart_msg,
+    output reg [7:0] msg_len
     );
     // mode define 
     parameter UP_COUNTER = 3'b001;
@@ -17,8 +21,141 @@ module command_controller(
 
     reg r_prev_btnL=0;
     reg [2:0]  r_mode = 3'b000;
-    reg [19:0] r_counter;   // 10ms¸¦ Àç±â À§ÇÑ counter
-    reg [13:0] r_ms10_counter;   //  9999  10ms°¡ µÉ¶§ ¸¶´Ù 1Áõ°¡
+    reg [19:0] r_counter;
+    reg [13:0] r_ms10_counter;
+
+    wire [7:0] digit_1000 = (r_ms10_counter / 1000) % 10 + 8'h30;
+    wire [7:0] digit_100  = (r_ms10_counter / 100) % 10  + 8'h30;
+    wire [7:0] digit_10   = (r_ms10_counter / 10) % 10   + 8'h30;
+    wire [7:0] digit_1    = (r_ms10_counter % 10)        + 8'h30;
+
+    //----------------------------
+    // 1. UART Circular Buffer
+    //----------------------------
+    reg [7:0] cmd_buffer[0:31];  
+    reg [4:0] wr_ptr = 0;        // write pointer
+    reg [4:0] rd_ptr = 0;        // read pointer
+    reg cmd_ready = 0;           
+
+    always @(posedge clk, posedge reset) begin
+        if (reset) begin
+            wr_ptr <= 0;
+            cmd_ready <= 0;
+        end 
+        else if (rx_done) begin
+            cmd_buffer[wr_ptr] <= rx_data;
+            wr_ptr <= wr_ptr + 1;
+            if(wr_ptr > 31) begin
+                wr_ptr <= 0;
+            end
+
+            if (rx_data == 8'h0A || rx_data == 8'h0D) begin
+                cmd_ready <= 1;
+            end
+        end
+        else if (cmd_ready) begin
+            cmd_ready <= 0;
+        end
+    end
+
+
+    //-----------------------------------
+    // 2. Command Parsing & LED Control
+    //-----------------------------------
+    integer i;
+    reg [7:0] cmd_string[0:31];
+    reg [5:0] length;
+
+    always @(posedge clk, posedge reset) begin
+        if (reset) begin
+            led <= 16'h0000;
+            rd_ptr <= 0;
+            msg_len <= 0;
+        end
+        else if (cmd_ready) begin
+            length = (wr_ptr >= rd_ptr) ? (wr_ptr - rd_ptr) : (32 + wr_ptr - rd_ptr);
+            for (i = 0; i < length; i = i + 1) begin
+                cmd_string[i] <= cmd_buffer[(rd_ptr + i) % 32];
+            end
+
+            // rd_ptr ì—…ë°ì´íŠ¸
+            rd_ptr <= wr_ptr;
+
+            // ===== LED ALL ON =====
+            if (length >= 8 &&
+                cmd_string[0]=="l"&&cmd_string[1]=="e"&&cmd_string[2]=="d"&&
+                cmd_string[3]=="a"&&cmd_string[4]=="l"&&cmd_string[5]=="l"&&
+                cmd_string[6]=="o"&&cmd_string[7]=="n") begin
+                led <= 16'hFFFF;
+                end
+
+            // ===== LED ALL OFF =====
+            else if (length >= 9 &&
+                cmd_string[0]=="l"&&cmd_string[1]=="e"&&cmd_string[2]=="d"&&
+                cmd_string[3]=="a"&&cmd_string[4]=="l"&&cmd_string[5]=="l"&&
+                cmd_string[6]=="o"&&cmd_string[7]=="f"&&cmd_string[8]=="f") begin
+                led <= 16'h0000;
+                end
+            
+            // ===== LED 00 ON =====
+            else if (length >= 7 &&
+                cmd_string[0]=="l"&&cmd_string[1]=="e"&&cmd_string[2]=="d"&&
+                cmd_string[3]=="0"&&cmd_string[4]=="0"&&cmd_string[5]=="o"&&
+                cmd_string[6]=="n") begin
+                led <= 16'h0001;
+                end
+            
+            // ===== LED 00 OFF =====
+            else if (length >= 8 &&
+                cmd_string[0]=="l"&&cmd_string[1]=="e"&&cmd_string[2]=="d"&&
+                cmd_string[3]=="0"&&cmd_string[4]=="0"&&cmd_string[5]=="o"&&
+                cmd_string[6]=="f"&&cmd_string[7]=="f") begin
+                led <= 16'h0000;
+                end
+
+            // ===== My Name =====
+            else if (length >= 6 &&
+                cmd_string[0]=="m"&&cmd_string[1]=="y"&&cmd_string[2]=="n"&&
+                cmd_string[3]=="a"&&cmd_string[4]=="m"&&cmd_string[5]=="e") begin
+                uart_msg <= {
+                    "M","y"," ","n","a","m","e"," ",
+                    "i","s"," ","J","W","\r","\n"
+                };
+                msg_len <= 15;
+            end
+
+            // ===== Up Counter =====
+            else if (length >= 9 &&
+                cmd_string[0]=="u"&&cmd_string[1]=="p"&&cmd_string[2]=="c"&&
+                cmd_string[3]=="o"&&cmd_string[4]=="u"&&cmd_string[5]=="n"&&
+                cmd_string[6]=="t"&&cmd_string[7]=="e"&&cmd_string[8]=="r") begin
+
+                uart_msg <= {
+                    "C","o","u","n","t","e","r",":"," ",
+                    digit_1000,
+                    digit_100,
+                    digit_10,
+                    digit_1,
+                    "\r","\n"
+                };
+                msg_len <= 15;
+            end
+
+            // ===== Help =====
+            else if (length >= 4 &&
+                cmd_string[0]=="h"&&cmd_string[1]=="e"&&cmd_string[2]=="l"&&
+                cmd_string[3]=="p") begin
+                uart_msg <= {
+                    "C","o","m","m","a","n","d","s",":"," ",
+                    "m","y","n","a","m","e",","," ",
+                    "u","p","c","o","u","n","t","e","r","\r","\n"
+                };
+                msg_len <= 29;
+                end else begin
+                    msg_len <= 0;
+                end
+        end
+    end
 
     // mode menu check 
     always @(posedge clk, posedge reset) begin
@@ -55,156 +192,4 @@ module command_controller(
         
     assign seg_data = (r_mode == UP_COUNTER ) ? r_ms10_counter :
                       (r_mode == DOWN_COUNTER) ? r_ms10_counter : sw;
-
-    
-    //================================================================
-    //== UART Command Parser (Circular Buffer + FSM)
-    //================================================================
-    
-    // -- 1. Circular Buffer (FIFO) Parameters and Registers
-    localparam QUEUE_DEPTH = 64;  // Å¥ Å©±â (64 bytes)
-    localparam PTR_WIDTH = 6;   // log2(QUEUE_DEPTH)
-    
-    reg [7:0] queue_mem [0:QUEUE_DEPTH-1]; // Å¥ ¸Þ¸ð¸®
-    reg [PTR_WIDTH-1:0] w_ptr = 0; // Write Æ÷ÀÎÅÍ
-    reg [PTR_WIDTH-1:0] r_ptr = 0; // Read Æ÷ÀÎÅÍ
-    reg [PTR_WIDTH:0] queue_count = 0; // Å¥¿¡ ÀúÀåµÈ µ¥ÀÌÅÍ °³¼ö (0 ~ 64)
-    
-    wire queue_empty = (queue_count == 0);
-    wire queue_full = (queue_count == QUEUE_DEPTH);
-    
-    // -- 2. Command Parser Parameters and Registers
-    localparam CMD_MAX_LEN = 16;  // ÃÖ´ë ¸í·É¾î ±æÀÌ
-    localparam S_IDLE = 2'b00;    // FSM »óÅÂ: ´ë±â
-    localparam S_READ_CMD = 2'b01; // FSM »óÅÂ: ¸í·É¾î ÀÐ´Â Áß
-    localparam S_PARSE = 2'b10;  // FSM »óÅÂ: ¸í·É¾î ÆÄ½Ì (½ÇÇà)
-
-    reg [1:0] parse_state = S_IDLE;
-    reg [7:0] cmd_buf [0:CMD_MAX_LEN-1]; // ¸í·É¾î ÀÓ½Ã ÀúÀå ¹öÆÛ
-    reg [4:0] cmd_ptr = 0; // ¸í·É¾î ¹öÆÛ Æ÷ÀÎÅÍ
-    
-    wire [7:0] read_data = queue_mem[r_ptr]; // Å¥¿¡¼­ ÀÐÀ» µ¥ÀÌÅÍ
-    reg read_enable; // Å¥ ÀÐ±â ½ÅÈ£
-
-    // -- 3. FIFO Write Logic (UART -> Queue)
-    // rx_done ½ÅÈ£°¡ ¿À°í Å¥°¡ ²Ë Â÷Áö ¾Ê¾ÒÀ¸¸é Å¥¿¡ µ¥ÀÌÅÍ ¾²±â
-    always @(posedge clk, posedge reset) begin
-        if (reset) begin
-            w_ptr <= 0;
-        end else if (rx_done && !queue_full) begin
-            queue_mem[w_ptr] <= rx_data;
-            w_ptr <= w_ptr + 1; // 6ºñÆ®ÀÌ¹Ç·Î 63 -> 0 ÀÚµ¿ ·¦¾î¶ó¿îµå
-        end
-    end
-
-    // -- 4. FIFO Counter Logic
-    // Å¥ ¾²±â(rx_done)¿Í ÀÐ±â(read_enable)¿¡ µû¶ó Ä«¿îÆ® Á¶Àý
-    always @(posedge clk, posedge reset) begin
-        if (reset) begin
-            queue_count <= 0;
-        end else begin
-            casex ({rx_done && !queue_full, read_enable}) // {write, read}
-                2'b10: queue_count <= queue_count + 1; // Write only
-                2'b01: queue_count <= queue_count - 1; // Read only
-                // 2'b11 (Write & Read): count stays same
-                // 2'b00 (Neither): count stays same
-            endcase
-        end
-    end
-
-    // -- 5. Parser FSM & LED Control Logic
-    // (±âÁ¸ÀÇ led always ºí·Ï°ú ÅëÇÕ)
-    always @(posedge clk, posedge reset) begin
-        if (reset) begin
-            led <= 16'h0000;
-            parse_state <= S_IDLE;
-            r_ptr <= 0;
-            cmd_ptr <= 0;
-            read_enable <= 0;
-        end else begin 
-            // --- 5-1. ÆÄ¼­ FSM µ¿ÀÛ ---
-            read_enable <= 0; // ¸Å »çÀÌÅ¬ 0À¸·Î ÃÊ±âÈ­
-            
-            case (parse_state)
-                S_IDLE: begin
-                    if (!queue_empty) begin // Å¥¿¡ µ¥ÀÌÅÍ°¡ ÀÖÀ¸¸é ÀÐ±â ½ÃÀÛ
-                        parse_state <= S_READ_CMD;
-                        cmd_ptr <= 0; // ¸í·É¾î ¹öÆÛ ÃÊ±âÈ­
-                    end
-                end
-                
-                S_READ_CMD: begin
-                    if (!queue_empty) begin
-                        read_enable <= 1; // Å¥¿¡¼­ 1¹ÙÀÌÆ® ÀÐÀ½
-                        
-                        // 0x0D (CR) ¶Ç´Â 0x0A (LF) -> Enter Å°
-                        if (read_data == 8'h0D || read_data == 8'h0A) begin 
-                            if (cmd_ptr > 0) begin // ºó ¸í·É¾î°¡ ¾Æ´Ï¸é
-                                parse_state <= S_PARSE; // ÆÄ½Ì ½ÃÀÛ
-                            end else begin
-                                parse_state <= S_IDLE; // ºó ¸í·É¾î´Â ¹«½Ã
-                            end
-                        end
-                        // ÀÏ¹Ý ¹®ÀÚ
-                        else if (cmd_ptr < CMD_MAX_LEN) begin
-                            cmd_buf[cmd_ptr] <= read_data;
-                            cmd_ptr <= cmd_ptr + 1;
-                        end
-                        // ¸í·É¾î ¹öÆÛ ¿À¹öÇÃ·Î¿ì (¹«½ÃÇÏ°í FSM ¸®¼Â)
-                        else begin
-                            parse_state <= S_IDLE;
-                        end
-                    end
-                    // Å¥°¡ ºñ¾ú´Âµ¥ S_READ_CMD »óÅÂÀÎ °æ¿ì (¿¹: Enter ¾øÀÌ ¹®ÀÚ¸¸ ÀÔ·Â)
-                    else begin
-                        parse_state <= S_IDLE;
-                    end
-                end
-                
-                S_PARSE: begin
-                    // --- 5-2. UART ¸í·É¾î ½ÇÇà (LED Á¦¾î ¿ì¼±±Ç) ---
-                    // "ledallon" (8±ÛÀÚ)
-                    if (cmd_ptr >= 8 && cmd_buf[3] == 8'h61 && cmd_buf[7] == 8'h6E) begin
-                        
-                        led <= 16'hFFFF;
-                    end
-                    // "ledalloff" (9±ÛÀÚ)
-                    else if (cmd_ptr >= 9 && cmd_buf[3] == 8'h61 && cmd_buf[8] == 8'h66) begin
-                        
-                        led <= 16'h0000;
-                    end
-                    // "led00on" (7±ÛÀÚ)
-                    else if (cmd_ptr >= 7 && cmd_buf[3] == 8'h30 && cmd_buf[6] == 8'h6E) begin
-                        
-                        led <= 16'h0001;
-                    end
-                    // "led00off" (8±ÛÀÚ)
-                    else if (cmd_ptr >= 8 && cmd_buf[3] == 8'h30 && cmd_buf[7] == 8'h66) begin
-                        
-                        led <= 16'h0000;
-                    end
-                    // "myname" (³¡±ÛÀÚ 'e' 0x65)
-                    else if (cmd_ptr >= 6 && cmd_buf[0] == 8'h6D && cmd_buf[5] == 8'h65) begin
-                    
-                    end
-                    // "upcounter" (³¡±ÛÀÚ 'r' 0x72)
-                    else if (cmd_ptr >= 9 && cmd_buf[0] == 8'h75 && cmd_buf[8] == 8'h72) begin
-                        
-                    end
-                    // "help" (³¡±ÛÀÚ 'p' 0x70)
-                    else if (cmd_ptr >= 4 && cmd_buf[0] == 8'h68 && cmd_buf[3] == 8'h70) begin
-                        
-                    end
-                    else begin
-                        parse_state <= S_IDLE; // ÆÄ½Ì ¿Ï·á, IDLE·Î º¹±Í
-                    end
-                end
-                
-            endcase
-            // --- 5-3. Å¥ Read Æ÷ÀÎÅÍ ¾÷µ¥ÀÌÆ® ---
-            if (read_enable) begin
-                r_ptr <= r_ptr + 1; // 6ºñÆ®ÀÌ¹Ç·Î 63 -> 0 ÀÚµ¿ ·¦¾î¶ó¿îµå
-            end
-        end
-    end
 endmodule

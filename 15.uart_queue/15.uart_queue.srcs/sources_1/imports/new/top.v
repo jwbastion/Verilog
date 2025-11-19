@@ -14,9 +14,10 @@ module top(
     output uartRx    // JB2   
     );
 
-    wire [7:0] w_rx_data;
+    wire [7:0] w_rx_data, w_msg_len;
     wire [13:0] w_seg_data;
     wire [2:0] w_clean_btn;
+    wire [511:0] w_uart_msg;
     wire w_rx_done;
 
     btn_debouncer u_button_debouncer (
@@ -34,7 +35,9 @@ module top(
         .rx_data(w_rx_data),   // for UART 
         .rx_done(w_rx_done),   // UART 
         .seg_data(w_seg_data),
-        .led(led)
+        .led(led),
+        .uart_msg(w_uart_msg),
+        .msg_len(w_msg_len)
     );
 
     fnd_controller u_fnd_controller(
@@ -50,6 +53,8 @@ module top(
         .reset(reset),
         .send_data(),
         .rx(RsRx),
+        .flat_msg(w_uart_msg),
+        .msg_len(w_msg_len),
         .tx(RsTx),
         .rx_data(w_rx_data),
         .rx_done(w_rx_done)
