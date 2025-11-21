@@ -107,7 +107,7 @@ module ds_rtc(
         end
         
         else if (tick) begin
-            // 1️⃣ 최초 1번만 초기화 수행
+            // 1️. 최초 1번만 초기화 수행
             if (!init_done) begin
                 ds1302_init();
             end
@@ -115,10 +115,10 @@ module ds_rtc(
             case (state)
 
                 //------------------------------------------------
-                // 2️⃣ 1Hz마다 Seconds 읽기 시작
+                // 2️. 1Hz마다 Seconds 읽기 시작
                 //------------------------------------------------
                 IDLE: begin
-                    if (tick_1sec) begin
+                    if (!init_done || tick_1sec) begin
                         CE <= 1;
                         tx_byte <= 8'h81;  // Seconds Read
                         io_dir <= 1;
@@ -167,7 +167,7 @@ module ds_rtc(
                 end
 
                 //------------------------------------------------
-                // 3️⃣ Minutes Read
+                // 3️. Minutes Read
                 //------------------------------------------------
                 READ_MIN_CMD: begin
                     io_out <= tx_byte[bit_cnt];
