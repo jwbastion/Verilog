@@ -4,7 +4,8 @@ module buzzer(
     input clk,
     input reset,
     input alarm_trigger,         // 1 클럭 동안 1 → 부저 동작 시작
-    output reg buzzer_out
+    output reg buzzer_out,
+    output reg [15:0] led
 );
 
     reg [23:0] tone_cnt = 0;
@@ -14,8 +15,6 @@ module buzzer(
     //parameter [23:0] TONE_DIV = 24'd38222;   // 1kHz 부저 tone
     parameter [26:0] DURATION = 27'd30_000_000;  // 부저 울릴 시간 (조절 가능)
 
-    reg prev_start = 0;
-    wire rising_edge = alarm_trigger && !prev_start;
     reg [23:0] tone_div = 0;
 
     parameter C  = 24'd191571;   // 도 (523Hz)
@@ -45,17 +44,17 @@ module buzzer(
             state <= IDLE;
             tone_cnt <= 0;
             dur_cnt <= 0;
-            playing <= 0;
+            tone_div <= 0;
             buzzer_out <= 0;
-            prev_start <= 0;
         end else begin
-            prev_start <= alarm_trigger;
-
             case (state)
                 IDLE: begin
                     buzzer_out <= 0;
-                    if (rising_edge)
+                    tone_cnt <= 0;
+                    dur_cnt <= 0;
+                    if (alarm_trigger)
                         state <= G1;
+                        led[0] <= ~led[0];
                 end
 
                 G1, G2, G3: tone_div <= G;
@@ -63,7 +62,13 @@ module buzzer(
                 B1, B2, B3: tone_div <= B;
                 C1: tone_div <= C;
 
-                default: tone_div <= 0;
+                DONE: begin
+                    buzzer_out <= 0;
+                    if (!alarm_trigger)
+                        state <= IDLE;
+                end
+
+                default: state <= IDLE;
             endcase
 
             // ---- Tone 발생 ----

@@ -101,6 +101,8 @@ module top(
     );
 
     alarm_compare u_compare(
+        .clk(clk),
+        .reset(reset),
         .current_time(w_seg_data),
         .alarm_time(w_alarm_time),
         .alarm_enable(alarm_set_done),
@@ -110,6 +112,7 @@ module top(
     buzzer u_buzzer(
         .clk(clk), .reset(reset),
         .alarm_trigger(alarm_trigger),
-        .buzzer_out(buzzer)
+        .buzzer_out(buzzer),
+        .led(led)
     );
 endmodule
